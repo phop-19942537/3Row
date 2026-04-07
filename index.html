@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MT Floating Auto-Scroll</title>
+    <style>
+        * { box-sizing: border-box; font-family: sans-serif; }
+        body { background: #121212; color: #eee; margin: 0; padding: 5px; display: flex; justify-content: center; }
+        
+        .card { 
+            background: #1e1e1e; 
+            border-radius: 10px; 
+            width: 100%; 
+            max-width: 320px; 
+            height: 95vh; /* กำหนดความสูงให้เหมาะกับจอ */
+            display: flex; 
+            flex-direction: column; 
+            border: 1px solid #333; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        
+        /* ส่วนบน: ล็อกอยู่กับที่ */
+        .header { padding: 10px; border-bottom: 2px solid #333; flex-shrink: 0; }
+        .status-bar { background: #2c2c2c; color: #ffc107; padding: 6px; border-radius: 5px; font-size: 13px; font-weight: bold; text-align: center; margin-bottom: 8px; border: 1px solid #444; }
+        
+        .btn-group { display: flex; gap: 5px; margin-bottom: 5px; }
+        .btn { border: none; padding: 12px 0; border-radius: 6px; font-size: 20px; font-weight: bold; cursor: pointer; color: white; flex: 1; }
+        .btn-p { background: #007bff; box-shadow: 0 3px #0056b3; }
+        .btn-b { background: #dc3545; box-shadow: 0 3px #a71d2a; }
+        .btn-p:active, .btn-b:active { transform: translateY(2px); box-shadow: none; }
+        
+        .btn-action { background: #444; padding: 6px; font-size: 11px; flex: none; width: 60px; color: #bbb; }
+
+        /* ส่วนตาราง: เลื่อนได้ (Scrolling Area) */
+        .table-container { 
+            flex-grow: 1; 
+            overflow-y: auto; 
+            background: #181818;
+            scrollbar-width: thin;
+            scrollbar-color: #444 #181818;
+        }
+        
+        /* ตกแต่ง Scrollbar สำหรับ Chrome/Safari */
+        .table-container::-webkit-scrollbar { width: 4px; }
+        .table-container::-webkit-scrollbar-track { background: #181818; }
+        .table-container::-webkit-scrollbar-thumb { background: #444; border-radius: 10px; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th { background: #252525; color: #888; position: sticky; top: 0; padding: 8px 2px; z-index: 10; border-bottom: 1px solid #333; }
+        td { border-bottom: 1px solid #2a2a2a; padding: 8px 2px; text-align: center; font-weight: bold; }
+        
+        /* สไตล์สีและเครื่องหมาย */
+        .p-text { color: #4da3ff; }
+        .b-text { color: #ff4d4d; }
+        .win { background: rgba(40, 167, 69, 0.1); color: #2ecc71; }
+        .loss { background: rgba(231, 76, 60, 0.1); color: #e74c3c; }
+        .predict-active { background: #4d3d00; outline: 1px solid #ffc107; }
+        .check-mark { font-size: 14px; margin-left: 2px; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <div class="header">
+        <div id="next-info" class="status-bar">รอผลตาที่ 1...</div>
+        <div class="btn-group">
+            <button class="btn btn-p" onclick="addResult('P')">P</button>
+            <button class="btn btn-b" onclick="addResult('B')">B</button>
+        </div>
+        <div class="btn-group" style="justify-content: space-between;">
+            <button class="btn btn-action" onclick="undo()">Undo</button>
+            <button class="btn btn-action" onclick="resetAll()" style="color:#ff4d4d">Clear</button>
+        </div>
+    </div>
+
+    <div class="table-container" id="scroll-area">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:12%">#</th>
+                    <th style="width:18%">ผล</th>
+                    <th style="width:35%">MMM</th>
+                    <th style="width:35%">TTT</th>
+                </tr>
+            </thead>
+            <tbody id="data-table"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    let history = JSON.parse(localStorage.getItem('mt_tracker_v2')) || [];
+
+    // เริ่มต้นแสดงผล
+    renderTable();
+
+    function addResult(val) {
+        history.push(val);
+        saveAndRender();
+    }
+
+    function undo() {
+        if (history.length > 0) {
+            history.pop();
+            saveAndRender();
+        }
+    }
+
+    function resetAll() {
+        if(confirm("ล้างข้อมูลทั้งหมด?")) {
+            history = [];
+            saveAndRender();
+        }
+    }
+
+    function saveAndRender() {
+        localStorage.setItem('mt_tracker_v2', JSON.stringify(history));
+        renderTable();
+        
+        // ฟังก์ชันเลื่อนลงล่างสุดอัตโนมัติ
+        const container = document.getElementById('scroll-area');
+        setTimeout(() => {
+            container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+        }, 50);
+    }
+
+    function renderTable() {
+        const tbody = document.getElementById('data-table');
+        tbody.innerHTML = "";
+        
+        const displayCount = Math.max(history.length, history.length >= 3 ? history.length + 1 : 0);
+
+        for (let i = 0; i < displayCount; i++) {
+            const totalCount = i + 1;
+            const row = tbody.insertRow(-1); 
+            
+            const cellNo = row.insertCell(0);
+            const cellRes = row.insertCell(1);
+            const cellM = row.insertCell(2);
+            const cellT = row.insertCell(3);
+
+            cellNo.innerText = totalCount;
+            cellNo.style.color = "#555";
+
+            if (i < history.length) {
+                const val = history[i];
+                cellRes.innerText = val;
+                cellRes.className = (val === 'P' ? 'p-text' : 'b-text');
+            } else {
+                cellRes.innerText = "?";
+                cellRes.style.color = "#444";
+            }
+
+            if (totalCount >= 4) {
+                let stepIdx = ((totalCount - 4) % 6) + 1;
+                let activeMode = (stepIdx <= 3) ? "M" : "T";
+                let baseVal = history[totalCount - 4]; 
+                
+                let predM = baseVal;
+                let predT = (baseVal === 'P' ? 'B' : 'P');
+
+                // MMM Column
+                let markM = (i < history.length) ? (history[i] === predM ? "✅" : "❌") : "";
+                cellM.innerHTML = `<span class="${predM==='P'?'p-text':'b-text'}">${predM}</span><span class="check-mark">${markM}</span>`;
+                if (i < history.length) cellM.className = (history[i] === predM ? "win" : "loss");
+                if (i >= history.length && activeMode === "M") cellM.classList.add('predict-active');
+
+                // TTT Column
+                let markT = (i < history.length) ? (history[i] === predT ? "✅" : "❌") : "";
+                cellT.innerHTML = `<span class="${predT==='P'?'p-text':'b-text'}">${predT}</span><span class="check-mark">${markT}</span>`;
+                if (i < history.length) cellT.className = (history[i] === predT ? "win" : "loss");
+                if (i >= history.length && activeMode === "T") cellT.classList.add('predict-active');
+            } else {
+                cellM.innerText = "-"; cellT.innerText = "-";
+            }
+        }
+        updateHeader();
+    }
+
+    function updateHeader() {
+        const nextIdx = history.length + 1;
+        const statusEl = document.getElementById('next-info');
+        if (nextIdx <= 3) {
+            statusEl.innerText = `ฐานข้อมูล: รอตาที่ ${nextIdx}/3`;
+        } else {
+            let nextStep = ((nextIdx - 4) % 6) + 1;
+            let mode = (nextStep <= 3) ? "โหมด MMM" : "โหมด TTT";
+            statusEl.innerHTML = `Step: ${nextStep}/6 | ${mode}`;
+        }
+    }
+</script>
+
+</body>
+</html>
